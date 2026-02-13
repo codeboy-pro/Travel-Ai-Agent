@@ -273,45 +273,65 @@ export default function ChatPage() {
     }
   };
 
-  // Fetch multiple images for multiple destinations - IMPROVED
+  // Fetch multiple images for multiple destinations - IMPROVED WITH BETTER ERROR HANDLING
   const fetchMultipleImages = async (destinations) => {
     const key = process.env.NEXT_PUBLIC_UNSPLASH_KEY;
-    console.log("Fetching images for:", destinations, "Key exists:", !!key);
-    if (!key || !destinations.length) return [];
+    console.log("=== IMAGE FETCH DEBUG ===");
+    console.log("Destinations to fetch:", destinations);
+    console.log("Unsplash key exists:", !!key);
+    console.log("Key length:", key?.length);
+    
+    if (!key) {
+      console.error("No Unsplash API key found! Check NEXT_PUBLIC_UNSPLASH_KEY environment variable.");
+      return [];
+    }
+    
+    if (!destinations.length) {
+      console.log("No destinations provided");
+      return [];
+    }
 
     const imagePromises = destinations.slice(0, 4).map(async (dest) => {
       try {
         const cleanDest = dest.replace(/[^a-zA-Z\s,]/g, "").trim();
-        const searchQuery = `${cleanDest} travel tourism`;
+        const searchQuery = `${cleanDest} travel landmark`;
         console.log("Searching Unsplash for:", searchQuery);
+        
         const resp = await fetch(
           `https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchQuery)}&per_page=5&orientation=landscape&client_id=${key}`,
         );
+        
+        console.log("Unsplash response status:", resp.status);
+        
+        if (!resp.ok) {
+          const errorText = await resp.text();
+          console.error("Unsplash API error:", resp.status, errorText);
+          return { destination: dest, url: null };
+        }
+        
         const data = await resp.json();
-        console.log(
-          "Unsplash response for",
-          dest,
-          ":",
-          data.results?.length,
-          "results",
-        );
-        const randomIndex = Math.floor(
-          Math.random() * Math.min(3, data.results?.length || 1),
-        );
-        return {
-          destination: dest,
-          url:
-            data.results?.[randomIndex]?.urls?.regular ||
-            data.results?.[0]?.urls?.regular ||
-            null,
-        };
+        console.log("Unsplash results for", dest, ":", data.results?.length || 0, "images");
+        
+        if (data.results && data.results.length > 0) {
+          const randomIndex = Math.floor(
+            Math.random() * Math.min(3, data.results.length),
+          );
+          return {
+            destination: dest,
+            url: data.results[randomIndex]?.urls?.regular || data.results[0]?.urls?.regular,
+          };
+        }
+        
+        return { destination: dest, url: null };
       } catch (e) {
-        console.error("Image fetch error for", dest, e);
+        console.error("Image fetch error for", dest, ":", e.message);
         return { destination: dest, url: null };
       }
     });
 
-    return Promise.all(imagePromises);
+    const results = await Promise.all(imagePromises);
+    console.log("Final image results:", results);
+    return results;
   };
 
   const startAI = (city) => {
